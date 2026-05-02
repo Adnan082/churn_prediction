@@ -10,7 +10,9 @@ Compares XGBoost, Random Forest, and Logistic Regression with:
 
 """
 
+import os
 import warnings
+import joblib
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -221,6 +223,28 @@ class ChurnPipeline:
         plt.tight_layout()
         plt.show()
 
+    def save_models(self, models_dir: str = "saved_models"):
+        """Saves all trained models and the test set to disk."""
+        os.makedirs(models_dir, exist_ok=True)
+        for name, model in self.best_estimators.items():
+            path = os.path.join(models_dir, f"{name}.pkl")
+            joblib.dump(model, path)
+            print(f"  Saved {name} -> {path}")
+        joblib.dump((self.X_test, self.y_test), os.path.join(models_dir, "test_data.pkl"))
+        print("  Saved test data.")
+
+    def load_models(self, models_dir: str = "saved_models"):
+        """Loads all saved models and test set from disk."""
+        model_names = ["LogisticRegression", "RandomForest", "XGBoost"]
+        for name in model_names:
+            path = os.path.join(models_dir, f"{name}.pkl")
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Model not found: {path}. Run the notebook first to train and save models.")
+            self.best_estimators[name] = joblib.load(path)
+            print(f"  Loaded {name} from {path}")
+        self.X_test, self.y_test = joblib.load(os.path.join(models_dir, "test_data.pkl"))
+        print("  Loaded test data.")
+
     def explain_best_model(self):
         """
         Uses SHAP to explain the best performing model (Selection based on F1).
@@ -266,25 +290,19 @@ class ChurnPipeline:
 
 
 if __name__ == "__main__":
-    # --- Execution Pipeline ---
     pipeline = ChurnPipeline()
-    
-    # 1. Load Data
-    X, y = pipeline.load_data()
-    
-    # 2. Split
-    X_train, X_test, y_train, y_test = pipeline.preprocess_split(X, y)
-    
-    # 3. Train & Tune
-    pipeline.train_models(X_train, y_train)
-    
-    # 4. Evaluate
-    pipeline.evaluate(X_test, y_test)
-    
-    # 5. Visualize
+
+    # Load pre-trained models saved by Churn_Modelling.ipynb
+    print("Loading saved models...")
+    pipeline.load_models("saved_models")
+
+    # Evaluate
+    pipeline.evaluate(pipeline.X_test, pipeline.y_test)
+
+    # Visualize
     print("\nGenerating visualizations...")
     pipeline.plot_confusion_matrices()
     pipeline.plot_roc_pr_curves()
-    
-    # 6. Explain
+
+    # Explain
     pipeline.explain_best_model()
